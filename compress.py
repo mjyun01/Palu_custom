@@ -18,7 +18,8 @@ def compress(args):
     model.to(torch.device(args.device))
     # Step 1: Perform rank selection to get layer-wise compression rate
     search_results, rank_sum, total_rank = rank_search(model, tokenizer, args)
-    # Step 2: Compress models
+    
+    #Step 2: Compress models
     compress_model(model, tokenizer, args, args.device, search_results)
     
     if args.dump_huggingface_model:
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--param_ratio_target", 
         type=float,
-        default=-1,
+        default=0.5,
         help="Target param ratio"
     )
 
