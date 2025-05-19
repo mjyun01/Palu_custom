@@ -8,6 +8,9 @@
     "LLaMA-2-7B-32K": 7500,
     "llama-7b": 4096,
     "Llama-2-7b-chat-hf": 4096,
+    "Llama-3.2-1B": 4096,
+    "Llama-3.2-3B": 4096,
+    "Llama-2-7B-hf": 4096,
     "Llama-2-7b-hf": 4096,
     "llama-13b": 4096,
     "Llama-2-13b-chat-hf": 4096,
@@ -16,5 +19,6 @@
     "Mistral-7B-v0.1": 8192,
     "longchat-7b-v1.5-32k": 31500,
     "Mistral-7B-Instruct-v0.2": 31500, 
+    "Meta-Llama-3-8B-Instruct" : 7950, 
     "vicuna-7b-v1.5-16k": 15500
 }

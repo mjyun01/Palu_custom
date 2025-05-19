@@ -6,7 +6,9 @@ import argparse
 import os
 from utils import load_model_and_tokenizer, add_common_args
 from palu.quant_utils import configure_latent_quantizer
+from palu.rank_search_custom import rank_search 
 from loguru import logger
+from palu.data_utils import get_calib_data 
 
 def get_ppl_eval_loaders(name, tokenizer, seqlen=2048):
     if "wikitext2" in name:
@@ -71,7 +73,32 @@ def eval_ppl(model, tokenizer, model_name, datasets, seqlen=2048, device="cuda")
     model = model.to(device)
     if isinstance(device, str):
         device = torch.device(device)
+    model_id = model.config._name_or_path
+    model.model_open_calibrate() 
+    print("calibration becomes ture")
+    search_results, rank_sum, total_rank = rank_search(model, tokenizer, model_id, 0.5) 
+    model.model_fix_rank(search_results)
+    calib_loader = get_calib_data(
+        "wikitext2", 
+        tokenizer, 
+        model_id, 
+        nsamples=256, 
+        seqlen=2048
+    ) 
+    # for l in range (32): 
+    #     for batch in tqdm(calib_loader, desc="Calibrating"):
+    #         batch = {k: v.to(model.device) for k, v in batch.items()}
+    #         model(**batch) 
+    #     model.model_last_calibrate() 
 
+    for batch in tqdm(calib_loader, desc="Calibrating"):
+        batch = {k: v.to(model.device) for k, v in batch.items()}
+        model(**batch) 
+    model.model_last_calibrate() 
+
+    print("calibration becomes false")
+    model.model_eval_start()
+    print("evaluation starts")
     results = {}
 
     for dataset in datasets.split(","):
@@ -127,13 +154,14 @@ if __name__ == '__main__':
     logger.remove()
     logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
     
+
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
     
     configure_latent_quantizer(
         model, n_bits=args.lt_bits,
-        group_size=args.lt_group_size,
-        sym=args.lt_sym,
-        clip_ratio=args.lt_clip_ratio,
+        group_size=0,
+        sym=True,
+        clip_ratio=1.0,
         hadamard=args.lt_hadamard
     )
     logger.info(f"Start evaluating ppl...")

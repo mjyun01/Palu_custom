@@ -7,7 +7,6 @@ def quantize_tensor(w: torch.tensor, n_bits, group_size, sym, clip_ratio=1.0) ->
     savedShape = w.shape
     assert w.dim() == 2 
 
-
     if group_size > 0:
         assert w.shape[-1] % group_size == 0
         w = w.reshape(-1, group_size) # row-major order
@@ -22,6 +21,8 @@ def quantize_tensor(w: torch.tensor, n_bits, group_size, sym, clip_ratio=1.0) ->
         w_min = w.amin(dim=-1, keepdim=True)
 
     if sym:
+        #print("symmetric quantization")
+        #exit()
         q_max = (2**(n_bits-1)-1)
         q_min = (-2**(n_bits-1))
         if clip_ratio < 1.0:
@@ -37,7 +38,7 @@ def quantize_tensor(w: torch.tensor, n_bits, group_size, sym, clip_ratio=1.0) ->
         scales = (w_max-w_min).clamp(min=1e-5) / q_max
         base = torch.round(-w_min/scales).clamp_(min=q_min, max=q_max)
     w = (torch.clamp(torch.round(w / scales) + base, q_min, q_max) - base) * scales
-    
+
     return w.reshape(savedShape)
 
 

@@ -1,6 +1,6 @@
 
 # Import necessary modules
-from utils import load_model_and_tokenizer, add_common_args
+#from utils import load_model_and_tokenizer, add_common_args
 import argparse
 import torch
 import lm_eval
@@ -8,7 +8,10 @@ from tqdm import tqdm
 from lm_eval.models.huggingface import HFLM
 from lm_eval.utils import make_table
 from lm_eval.utils import eval_logger as logger
-from palu.quant_utils import configure_latent_quantizer
+#from palu.quant_utils import configure_latent_quantizer
+#from utils import load_model_and_tokenizer, add_common_args
+from loguru import logger
+from transformers import LlamaConfig, MistralConfig, AutoTokenizer
 import os
 import json
 
@@ -39,17 +42,17 @@ def run_lm_eval_zero_shot(model, tokenizer, batch_size=64, max_length=4096, task
     
     return results['results']
 
-
+# ,"hellaswag","piqa","arc_easy","arc_challenge","winogrande"
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    add_common_args(parser)
+    #add_common_args(parser)
     parser.add_argument(
-        '--tasks', type=lambda s: [item for item in s.split(',')], default=[],
+        '--tasks', type=lambda s: [item for item in s.split(',')], default=["openbookqa"],
         help='Task to be evaled'
     )
     parser.add_argument(
         '--batch_size',
-        default=8,
+        default=1,
         type=int,
         help='batch size for lm_eval tasks'
     )
@@ -68,17 +71,28 @@ if __name__ == '__main__':
         type=str,
         help="Directory to save the .json results."
     )
-    
+    parser.add_argument('--model_name_or_path', type=str, default='meta-llama/Llama-3.2-1B')
     args = parser.parse_args()  
+    
     logger.info("Loading model and tokenizer...")
-    model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
-    configure_latent_quantizer(
-        model, n_bits=args.lt_bits,
-        group_size=args.lt_group_size,
-        sym=args.lt_sym,
-        clip_ratio=args.lt_clip_ratio,
-        hadamard=args.lt_hadamard
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from models.llama_think_gen import LlamaForCausalLM
+    # config.k_bits = model_args.k_bits
+    # config.v_bits = model_args.v_bits
+    # config.group_size = model_args.group_size
+    # config.residual_length = model_args.residual_length
+    config = LlamaConfig.from_pretrained(args.model_name_or_path)
+    config.p_ratio = 0.4
+    model = LlamaForCausalLM.from_pretrained(
+        pretrained_model_name_or_path=args.model_name_or_path,
+        config=config,
+        low_cpu_mem_usage=True,
+        use_flash_attention_2=False,
+        device_map="auto",
     )
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, legacy=False)
     logger.info("Start running lm_eval zero-shot evaluation...")
     res = run_lm_eval_zero_shot(model, tokenizer, args.batch_size, task_list=args.tasks)
     
@@ -88,7 +102,7 @@ if __name__ == '__main__':
 
     # Save results to JSON file
     model_name = args.model_name_or_path.split("/")[-1]
-    output_file = os.path.join(output_dir, f"{model_name}_{args.lt_bits}{'_had' if args.lt_hadamard else ''}.json")
+    output_file = os.path.join(output_dir, f"{model_name}.json")
     with open(output_file, "w") as f:
         json.dump(res, f, indent=4)
 

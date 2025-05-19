@@ -4,7 +4,7 @@ import numpy as np
 import random, torch
 from functools import reduce
 from palu.model import HeadwiseLowRankModule
-from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig, LlamaConfig
 
 
 def get_obj_from_str(string, reload=False):
@@ -81,13 +81,46 @@ def load_model_and_tokenizer(model_name_or_path, use_flash_attn2=False):
         model_name_or_path,
         trust_remote_code=True,
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name_or_path,
-        torch_dtype=torch.float16,
-        trust_remote_code=True,
-        device_map="auto",
-        attn_implementation="flash_attention_2" if use_flash_attn2 else "sdpa",
+    from models.llama_my_decompose import LlamaForCausalLM
+    # config.k_bits = model_args.k_bits
+    # config.v_bits = model_args.v_bits
+    # config.group_size = model_args.group_size
+    # config.residual_length = model_args.residual_length
+    # config.p_ratio = model_args.p_ratio
+    # print(config._attn_implementation)
+    # print(config.p_ratio)
+    # config = LlamaConfig.from_pretrained(model_name_or_path)
+    # config.p_ratio = 0.4 
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     pretrained_model_name_or_path=model_name_or_path,
+    #     config=config,
+    #     torch_dtype=torch.float16,
+    #     low_cpu_mem_usage=True,
+    #     use_flash_attention_2=False,
+    #     device_map="auto",
+    # )
+    model = LlamaForCausalLM.from_pretrained(
+    model_name_or_path,
+    torch_dtype=torch.float16,
+    trust_remote_code=True,
+    device_map="auto",
+    attn_implementation="flash_attention_2" if use_flash_attn2 else "eager",
     )
+    # #pred_long_bench
+    # model = AutoModelForCausalLM.from_pretrained(
+    # model_name_or_path,
+    # torch_dtype=torch.float16,
+    # trust_remote_code=True,
+    # device_map="auto",
+    # attn_implementation="flash_attention_2" if use_flash_attn2 else "eager",
+    # )
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     model_name_or_path,
+    #     torch_dtype=torch.float16,
+    #     trust_remote_code=True,
+    #     device_map="auto",
+    #     attn_implementation="flash_attention_2" if use_flash_attn2 else "sdpa",
+    # )
     model.eval()
     # Fix the bug in generation configs
     #TODO: Add reference to the issue that also faced this bug

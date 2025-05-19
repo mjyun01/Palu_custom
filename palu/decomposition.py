@@ -30,29 +30,12 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
     )
     cache_file = f"cache/whiten/{model_id.replace('/','_')}_w2_scaling_matrices_fp16.pt"
     os.makedirs("cache/whiten", exist_ok=True)
-    """
-    cache format:
-    [
-        {
-            "attn.q_proj": torch.Tensor,
-            "attn.k_proj": torch.Tensor,
-            "attn.v_proj": torch.Tensor,
-            "attn.o_proj": torch.Tensor,
-            "mlp.gate_proj": torch.Tensor,
-            "mlp.up_proj": torch.Tensor,
-            "mlp.down_proj": torch.Tensor
-        },
-        ... (stacked n times, in the order of model layers)
-    ]
-    """
     logger.info(f"[whiten] Calibration dataset: {args.calib_dataset}", fg="yellow")
     logger.info(f"[whiten] Search cache_file={cache_file}", fg="yellow")
     if os.path.exists(cache_file) and args.use_cache:
         logger.info(f"[whiten] File {cache_file} exist.", fg="green")
         logger.info(f"[whiten] Load scaling diag matrix from cache: {cache_file}", fg="yellow")
         scaling_matrics = torch.load(cache_file, map_location="cpu")
-
-
         layers = model.model.layers
         for i in tqdm(range(len(layers))):
             layer = layers[i]
@@ -61,7 +44,6 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
                 if name in scaling_matrics[i]:
                     scaling_diag_matrix = scaling_matrics[i][name]
                     subset[name].scaling_diag_matrix = scaling_diag_matrix
-
         return 
     
     logger.info(f"No cache_file={cache_file}", fg="red")
@@ -145,9 +127,12 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
         torch.cuda.empty_cache()
         layer_scaling_matrices = {}
         for name in subset:
-            if not ("k_proj" in name or "v_proj" in name):
+            #if not ("k_proj" in name or "v_proj" in name):
+            if not ("v_proj" in name): #(mjyun) only for V
                 continue
             raw_scaling_diag_matrix = subset[name].scaling_diag_matrix.double().cuda()
+            print(raw_scaling_diag_matrix)
+            exit()
             try:
                 scaling_diag_matrix = torch.linalg.cholesky(raw_scaling_diag_matrix).float()
                 subset[name].scaling_diag_matrix = scaling_diag_matrix
@@ -258,11 +243,47 @@ def compress_model_svd(model, selection_result):
         )
         setattr(info["father"], info["name"],  head_wise_svd_linear)
 
+
+def compress_model_merge_svd(model, selection_result):
+    logger.info("Compressing model with merged svd decomposition...")
+    # Compress the model
+    module_dict = {name: module for name, module in model.named_modules()}
+    full_name_dict = {module: name for name, module in model.named_modules()}
+    linear_info = {}
+    modules = [model]
+    while len(modules) > 0:
+        submodule = modules.pop()
+        for name, raw_linear in submodule.named_children():
+            if isinstance(raw_linear, nn.Linear):
+                full_name = full_name_dict[raw_linear]
+                linear_info[raw_linear] = {
+                    "father": submodule,
+                    "name": name,
+                    "full_name": full_name,
+                }
+            else:
+                modules.append(raw_linear)
+
+    logger.info(f"Start decompose the layer with selected ranks... #target layers: {len(selection_result.keys())}")
+    for layername, selected_head_rank in tqdm(selection_result.items()):
+        logger.debug(f"Decompose {layername} with ranks: {selected_head_rank}")
+        # set ratio
+        raw_linear = module_dict[layername]
+        info = linear_info[raw_linear]
+        print("head-wise svd", layername, raw_linear)
+        head_wise_svd_linear = HeadwiseLowRankModule.from_linear(
+            raw_linear,
+            selected_head_rank
+        )
+        setattr(info["father"], info["name"],  head_wise_svd_linear)
+
 # Wrapper for different decompose methods
 def compress_model(model, tokenizer, args, dev, selection_result):
     if args.decompose_method == "whiten":
         compress_model_whiten(model, tokenizer, args, dev, selection_result)
     elif args.decompose_method == "svd":
         compress_model_svd(model, selection_result)
+    elif args.decompoe_method == "m_svd" : 
+        compress_model_merge_svd(model, tokenizer, args, dev, selection_result) 
     else:
         raise ValueError(f"Decomposition method {args.decompose_method} is not supported.")

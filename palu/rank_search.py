@@ -46,7 +46,8 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
         logger.info(f"[Fisher] Load cache_file={cache_file}", fg="yellow")
         all_fisher_info = torch.load(cache_file, map_location="cpu")
         for name, module in model.named_modules():
-            if isinstance(module, nn.Linear) and "attn" in name:
+            #if isinstance(module, nn.Linear) and "attn" in name:
+            if isinstance(module, nn.Linear) and "v_proj" in name :
                 module.fisher_info = all_fisher_info[name].to(module.weight.device)
         return
     model.eval()
@@ -55,7 +56,8 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
     logger.info(f"[Fisher] Create fisher info list...", fg="yellow")
 
     for name, module in model.named_modules():
-        if isinstance(module, nn.Linear) and "attn" in name:
+        # if isinstance(module, nn.Linear) and "attn" in name: 
+        if isinstance(module, nn.Linear) and "v_proj" in name : #(mjyun) only need v_projection
             module.fisher_info = 0
 
     # get fisher info
@@ -65,18 +67,21 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
         out = model(input_ids=input_ids, labels=labels)
         out[0].backward()
         for name, module in model.named_modules():
-            if isinstance(module, nn.Linear) and "attn" in name:
+            #if isinstance(module, nn.Linear) and "attn" in name: 
+            if isinstance(module, nn.Linear) and "v_proj" in name :  #(mjyun) only need v_projection
                 module.fisher_info += module.weight.grad.detach().to(torch.float32).pow(2)
         model.zero_grad()
 
     for name, module in model.named_modules():
-        if isinstance(module, nn.Linear) and "attn" in name:
+        #if isinstance(module, nn.Linear) and "attn" in name:
+        if isinstance(module, nn.Linear) and "v_proj" in name :  #(mjyun) only need v_projection
             module.fisher_info = module.fisher_info.div(len(calib_loader)).sqrt()
 
     # remove and save fisher_info
     all_fisher_info = {}
     for name, module in model.named_modules():
-        if isinstance(module, nn.Linear) and "attn" in name:
+        #if isinstance(module, nn.Linear) and "attn" in name:
+        if isinstance(module, nn.Linear) and "v_proj" in name :  #(mjyun) only need v_projection
             module._forward_hooks.clear()
             all_fisher_info[name] = module.fisher_info
 
@@ -85,6 +90,9 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
 
 def rank_search(model: nn.Module, tokenizer, args):
     logger.info(f"[Rank search] Do rank searching. Search method: {args.search_method}", fg="yellow")
+    # print(model.config.num_key_value_heads)
+    # print(model.config.num_attention_heads)
+    # exit()
     if args.search_method == "uniform":
         target_model_class = AVAILABLE_MODELS[model.config.model_type]["ModelForCausalLM"]
         total_rank = 0
@@ -92,22 +100,22 @@ def rank_search(model: nn.Module, tokenizer, args):
         info = target_model_class.get_kv_info(model, args.head_group_size)
         
         for name, module in model.named_modules():
-            if "k_proj" in name or "v_proj" in name:                
+            #if "k_proj" in name or "v_proj" in name:       
+            if "v_proj" in name:   #(mjyun) only need v_projection         
                 module_rank = info.num_lr_groups * info.lr_group_dims
                 total_rank += module_rank
-                
                 select_result.update({name: [info.lr_group_dims*args.param_ratio_target] * info.num_lr_groups})
 
         select_result = rounding_search_result(select_result)
         rank_sum = sum([sum(v) for k, v in select_result.items()])
-        logger.info(f"[Rank search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
+        logger.info(f"[Rank search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%") 
+
         return select_result, rank_sum, total_rank    
+    
     elif args.search_method == "fisher":
         # Prepare Fisher information
         calib_loader = get_calib_data(args.calib_dataset, tokenizer, args.model_id, 2048, seqlen=args.calib_seqlen)
         calib_fisher_info(model, calib_loader, torch.device(args.device), args.use_cache)
-        
-        
         target_model_class = AVAILABLE_MODELS[model.config.model_type]["ModelForCausalLM"]
         total_rank = 0
         fisher_sum = 0.0
@@ -115,11 +123,12 @@ def rank_search(model: nn.Module, tokenizer, args):
         select_result = {}
         
         info = target_model_class.get_kv_info(model, args.head_group_size)
+
         for name, module in model.named_modules():
-            if "k_proj" in name or "v_proj" in name:
+            #if "k_proj" in name or "v_proj" in name:
+            if "v_proj" in name:   #(mjyun) only need v_projection     
                 module_rank = info.num_lr_groups * info.lr_group_dims
                 total_rank += module_rank
-                
                 select_result.update({name: [info.lr_group_dims] * info.num_lr_groups})
                 
                 fisher = module.fisher_info.reshape(info.num_lr_groups, -1, module.in_features)
@@ -166,6 +175,7 @@ def rank_search(model: nn.Module, tokenizer, args):
         logger.info(f"[Rank Search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
         
         return select_result, rank_sum, total_rank    
+
     elif args.search_method == "fisher_uniform":
         # Prepare Fisher information
         calib_loader = get_calib_data(args.calib_dataset, tokenizer, args.model_id, 2048, seqlen=args.calib_seqlen)
@@ -174,18 +184,18 @@ def rank_search(model: nn.Module, tokenizer, args):
         target_model_class = AVAILABLE_MODELS[model.config.model_type]["ModelForCausalLM"]
             
         total_rank = 0
-        
         fisher_sum = 0.0
         fisher_info_dict = {}
         select_result = {}
+
         info = target_model_class.get_kv_info(model, model.config.num_key_value_heads)
         
         for name, module in model.named_modules():
-            if "k_proj" in name or "v_proj" in name:
+            if "v_proj" in name:   #(mjyun) only need v_projection     
                 module_rank = info.num_lr_groups * info.lr_group_dims
                 total_rank += module_rank
                 
-                select_result.update({name: [info.lr_group_dims] * info.num_lr_groups})
+                select_result.update({name: [info.lr_group_dims] * info.num_lr_groups}) 
                 fisher = module.fisher_info.reshape(info.num_lr_groups, -1, module.in_features)
                 
                 fisher_list = [torch.mean(fisher[i]).item() for i in range(info.num_lr_groups)]
@@ -226,7 +236,6 @@ def rank_search(model: nn.Module, tokenizer, args):
         select_result = rounding_search_result(select_result)
         rank_sum = sum([sum(v) for k, v in select_result.items()])
         logger.info(f"[Rank Search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
-        
         return select_result, rank_sum, total_rank
     else:
         raise NotImplementedError  

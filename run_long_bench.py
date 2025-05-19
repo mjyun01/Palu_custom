@@ -13,8 +13,11 @@ from loguru import logger
 from datetime import datetime
 os.environ["WANDB_DISABLED"] = "true"
 
+import warnings 
+warnings.filterwarnings('ignore') 
+
 from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
-from utils import load_model_and_tokenizer, add_common_args
+from utils_origin import load_model_and_tokenizer, add_common_args
 from palu.quant_utils import configure_latent_quantizer
 import palu.model
 
@@ -65,8 +68,8 @@ def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset
                 **input,
                 max_new_tokens=max_gen,
                 num_beams=1,
-                do_sample=False,
-                temperature=1.0,
+                do_sample=None,
+                temperature=None,
                 min_length=context_length+1,
                 eos_token_id=[tokenizer.eos_token_id, tokenizer.encode("\n", add_special_tokens=False)[-1]],
             )[0]
@@ -75,8 +78,8 @@ def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset
                 **input,
                 max_new_tokens=max_gen,
                 num_beams=1,
-                do_sample=False,
-                temperature=1.0,
+                do_sample=None,
+                temperature=None,
                 pad_token_id=tokenizer.eos_token_id,
             )[0]
         pred = tokenizer.decode(output[context_length:], skip_special_tokens=True)
@@ -113,7 +116,7 @@ def main(args):
     # Example: Mistral-7B-Instruct-v0.2_ratio-0.7_gs-4-fisher_uniform
     raw_model_name = args.model_name_or_path.split("/")[-1]
     model_type = args.model_name_or_path.split("/")[-1].split('_')[0]
-        
+    print(model_type)
     model.eval()
     if not model_type in model2maxlen:
         raise ValueError(f"Model {model_type} not supported")
@@ -170,7 +173,7 @@ if __name__ == '__main__':
     add_common_args(parser)
     parser.add_argument(
         '--datasets', type=lambda s: [item for item in s.split(',')], 
-        default=["triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum", "multi_news"],
+        default=["samsum","lcc","multi_news","qasper", "qmsum","triviaqa","trec"], #"repobench-p"
         help='The datasets to be evaluated'
     )
     parser.add_argument(

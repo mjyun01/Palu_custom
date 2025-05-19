@@ -18,6 +18,7 @@ def _per_head_whiten_decomposition_from_weight(weight, scaling_diag_matrix, rank
     
     U, S, Vt = torch.linalg.svd(W_scale, full_matrices=False)
     
+    #print("W_scale shape", W_scale.shape) 
     V = torch.matmul(Vt, scaling_matrix_inv)
     
     # Low rank approximation to the target rank
@@ -181,7 +182,11 @@ class HeadwiseLowRankModule(nn.Module):
         wl = []
         wr = []
         for i in range(len(ranks)):
-            l, r = _per_head_whiten_decomposition_from_weight(w[i], old_module.scaling_diag_matrix, ranks[i])
+            l, r = _per_head_whiten_decomposition_from_weight(w[i], old_module.scaling_diag_matrix, ranks[i]) 
+            #print(w[i].shape) 
+            #print(old_module.scaling_diag_matrix.shape) 
+
+            #exit()
             # l: (head_dim, rank), r: (rank, hidden_size)
             wl.append(l)
             wr.append(r)

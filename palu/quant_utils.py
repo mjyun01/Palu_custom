@@ -4,7 +4,7 @@ import torch.nn as nn
 def configure_latent_quantizer(
         model: nn.Module, 
         n_bits:4,
-        group_size=0,
+        group_size=64,
         sym=True,
         clip_ratio=1.0,
         hadamard=False,

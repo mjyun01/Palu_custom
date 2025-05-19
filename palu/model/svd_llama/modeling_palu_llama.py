@@ -1,8 +1,13 @@
-from transformers import LlamaForCausalLM
+
 import torch.nn as nn
 from types import SimpleNamespace
 from .configuration_palu_llama import PaluLlamaConfig
 from ..modules.svd_linear import HeadwiseLowRankModule
+
+# from transformers import LlamaForCausalLM
+import sys
+sys.path.append('/home/mjyun/Palu_custom/models/')
+from llama_mlrd_test import LlamaForCausalLM
 
 class PaluLlamaForCausalLM(LlamaForCausalLM):
     config_class = PaluLlamaConfig
@@ -35,9 +40,10 @@ class PaluLlamaForCausalLM(LlamaForCausalLM):
     
     
     @staticmethod
-    def get_kv_info(llama: LlamaForCausalLM, num_heads_in_lr_groups: int):
-        num_lr_groups = llama.config.num_attention_heads // num_heads_in_lr_groups
-        num_lr_kv_groups = llama.config.num_key_value_heads // num_heads_in_lr_groups
+    def get_kv_info(llama: LlamaForCausalLM, num_heads_in_lr_groups: int): 
+
+        num_lr_groups = llama.config.num_attention_heads // num_heads_in_lr_groups # 32 / 4 
+        num_lr_kv_groups = llama.config.num_key_value_heads // num_heads_in_lr_groups # 8 / 4 
         head_dim = llama.config.hidden_size // llama.config.num_attention_heads
         lr_group_dims = head_dim * num_heads_in_lr_groups
         
