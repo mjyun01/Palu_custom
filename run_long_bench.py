@@ -102,6 +102,8 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path, use_flash_attn2=args.flash2)
+    model.q_bit = args.lt_bits 
+    model.set_configuration()
     configure_latent_quantizer(
         model, n_bits=args.lt_bits,
         group_size=args.lt_group_size,
@@ -173,7 +175,9 @@ if __name__ == '__main__':
     add_common_args(parser)
     parser.add_argument(
         '--datasets', type=lambda s: [item for item in s.split(',')], 
-        default=["samsum","lcc","multi_news","qasper", "qmsum","triviaqa","trec"], #"repobench-p"
+        default=["repobench-p", "lcc", "samsum","multi_news","qasper", "triviaqa","trec"], #"repobench-p"
+        #default=["samsum","lcc", "repobench-p", "multi_news","qasper", "qmsum","trec"],
+        #default=["triviaqa","trec"], #"repobench-p"
         help='The datasets to be evaluated'
     )
     parser.add_argument(

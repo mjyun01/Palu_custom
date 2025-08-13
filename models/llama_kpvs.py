@@ -440,10 +440,6 @@ def apply_rotary_pos_emb_with_mask_dynamic(k, cos, sin, mask, seq_len):
     k_embed = (k_full * cos) + (rotate_half(k_full) * sin)
     return k_embed
 
-def tucker_decomposition(tensor, ranks):
-    core, factors = tucker(tensor, rank=ranks)
-    return core, factors
-
 
 class LlamaAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
@@ -490,7 +486,7 @@ class LlamaAttention(nn.Module):
         self.S = None 
         self.calibrate = True 
         self.fix_parameter = False
-        self.ratio = 0.1
+        self.ratio = 0.2
         self.k_ratio = 0.4
         self.scaling_matrix = None 
         self.rank = 0
@@ -556,8 +552,8 @@ class LlamaAttention(nn.Module):
 
         if past_key_value is not None:
             if q_len == 1 : # decode stage 
-                _, value_states = past_key_value.update_think_gen(key_states, value_states, self.layer_idx) 
-                #_, value_states = past_key_value.update_think_gen_quant(key_states, value_states, self.layer_idx, self.scale, self.mn, self.q_bit) 
+                #_, value_states = past_key_value.update_think_gen(key_states, value_states, self.layer_idx) 
+                _, value_states = past_key_value.update_think_gen_quant(key_states, value_states, self.layer_idx, self.scale, self.mn, self.q_bit) 
                 self.seq_len += 1
             else : #prefill stage  
                 self.seq_len = q_len 

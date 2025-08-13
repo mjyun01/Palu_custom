@@ -144,7 +144,8 @@ class PaluLlamaConfig(PretrainedConfig):
 
         # for avsd
         self.head_wise_ranks = head_wise_ranks
-        
+
+ 
     def _rope_scaling_validation(self):
         """
         Validate the `rope_scaling` configuration.

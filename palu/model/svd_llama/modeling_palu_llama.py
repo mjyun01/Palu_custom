@@ -8,6 +8,7 @@ from ..modules.svd_linear import HeadwiseLowRankModule
 import sys
 sys.path.append('/home/mjyun/Palu_custom/models/')
 from llama_mlrd_test import LlamaForCausalLM
+from llama_mlrd_test import LlamaAttention
 
 class PaluLlamaForCausalLM(LlamaForCausalLM):
     config_class = PaluLlamaConfig
@@ -38,6 +39,12 @@ class PaluLlamaForCausalLM(LlamaForCausalLM):
                 new_layer=HeadwiseLowRankModule(self.head_wise_ranks[name],module.in_features,module.out_features,bias=module.bias is not None)
                 setattr(info["father"], info["name"], new_layer)
     
+    def set_configuration(self) : 
+        for m in self.modules() : 
+            if type(m) in [LlamaAttention] : 
+                m.q_bit = self.q_bit 
+                #print("settiung q_bit as ", self.q_bit)
+
     
     @staticmethod
     def get_kv_info(llama: LlamaForCausalLM, num_heads_in_lr_groups: int): 

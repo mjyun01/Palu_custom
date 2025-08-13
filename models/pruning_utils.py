@@ -9,6 +9,27 @@ import json
 # perform qk calculation and get indices
 # this version will not update in inference mode
 
+def get_structured_channel_eviction(v, p) :  #reduce entire channel for all token
+    # q and k shapes: (B, G, T, C)
+    pruning_ratio = p
+    B, G, T, C = v.shape
+    v = torch.transpose(v, 0, 2) 
+    v = v.reshape(v.shape[0], -1)
+
+    outlier_mask = torch.zeros_like(v)
+
+    pruning_num = int( C * G *pruning_ratio)  
+    abs_v = torch.abs(v) 
+    Score_metric = torch.norm(abs_v, dim=0) #[T, C]
+    pruned_k = torch.zeros_like(abs_v) 
+    remaining_channels = torch.topk(Score_metric, pruning_num)[1]  # Shape: (pruning_num)
+    pruned_k[ :, remaining_channels]  = v[ :, remaining_channels] 
+    outlier_mask[:, remaining_channels] = 1
+    pruned_k = torch.reshape(pruned_k, (B, T, G, C)).transpose(1, 2).contiguous()
+    del(v)
+    #del(outlier_mask)
+    return pruned_k
+    
 def key_pruner_query_driven_prerope_2_q(kv_states, q_states, window_size=32, recent_size=0, ratio=0.3):
     _, _, seqlen, head_dim = kv_states.shape
     k = int(head_dim * ratio)

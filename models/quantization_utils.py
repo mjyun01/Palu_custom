@@ -1,7 +1,7 @@
 import torch 
 
 def quant_per_token(k: torch.FloatTensor, bits: int):
-    assert len(k.shape) == 4
+    assert len(k.shape) == 4 
     shape = k.shape
     B, nh, T, D = shape
     # ================== Get Scale & Zeros ===============
@@ -29,9 +29,12 @@ def dequant_per_token(q: torch.IntTensor, scale: torch.FloatTensor, mn: torch.Fl
 
 def fake_quant_data_per_token(data, bit=3) : 
     bits = bit
-    quant_tensor, scale, mn = quant_per_token(data, bits)
-    dequant_tensor = dequant_per_token(quant_tensor, scale, mn, bits)
-    return dequant_tensor 
+    if (bit==16) : 
+        return data 
+    else : 
+        quant_tensor, scale, mn = quant_per_token(data, bits)
+        dequant_tensor = dequant_per_token(quant_tensor, scale, mn, bits) 
+        return dequant_tensor 
 
 def quant_per_token_TC(k: torch.FloatTensor, bits: int):
     assert len(k.shape) == 3
@@ -59,10 +62,12 @@ def dequant_per_token_TC(q: torch.IntTensor, scale: torch.FloatTensor, mn: torch
     return dequant
 
 def fake_quant_per_token_TC(data, bits=3) :
-    quant, scale, mn = quant_per_token_TC(data, bits)
-    dequant_tensor = dequant_per_token_TC(quant, scale, mn) 
-
-    return dequant_tensor 
+    if (bits==16) : 
+        return data 
+    else : 
+        quant, scale, mn = quant_per_token_TC(data, bits)
+        dequant_tensor = dequant_per_token_TC(quant, scale, mn) 
+        return dequant_tensor 
 
 if __name__=="__main__" : 
     B, G, T, C = 1, 2, 4, 8
@@ -203,9 +208,15 @@ def dequant_per_channel_TC(data: torch.FloatTensor,
 
 def fake_quant_data_TC(data,  bits : int) : 
     B, T, C = data.shape 
-    quant_tensor, scale, mn = quant_per_channel_TC(data, bits)
-    dequant_tensor = dequant_per_channel_TC(quant_tensor, scale, mn)
-    return dequant_tensor, scale, mn  
+    if (bits==16) : 
+        quant_tensor, scale, mn = quant_per_channel_TC(data, bits)
+        scale = torch.ones_like(scale)
+        mn = torch.zeros_like(mn)
+        return data, scale, mn 
+    else : 
+        quant_tensor, scale, mn = quant_per_channel_TC(data, bits)
+        dequant_tensor = dequant_per_channel_TC(quant_tensor, scale, mn)
+        return dequant_tensor, scale, mn  
 
 def fake_quant_with_param(data, scale, mn, bits) : 
     max_int = 2 ** bits - 1
